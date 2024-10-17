@@ -1,0 +1,7 @@
+langchain-community
+openai
+PyPDF2
+faiss-cpu
+requests
+schedule
+discord.py
