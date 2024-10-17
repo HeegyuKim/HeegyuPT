@@ -22,7 +22,7 @@ def download_pdf(url):
         print("PDF already downloaded.")
         return pdf_path
     
-    os.path.makedirs("pdfs", exist_ok=True)
+    os.makedirs("pdfs", exist_ok=True)
 
     response = requests.get(url)
     with open(pdf_path, "wb") as f:
