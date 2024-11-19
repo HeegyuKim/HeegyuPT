@@ -11,6 +11,8 @@ from web_summ import summarize_website
 import logging
 import ajou_portal
 import os
+from ai_reviewer.firebase_utils import FirebaseManager
+from ai_reviewer.review import review_pdf
 
 
 logger = logging.getLogger('discord')
@@ -27,6 +29,7 @@ intents.guilds = True
 client = openai.OpenAI()
 
 bot = commands.Bot(command_prefix='!', intents=intents)
+manager = FirebaseManager()
 
 async def download_file(ctx, url, filename):
     # 파일 다운로드
@@ -46,7 +49,7 @@ async def on_ready():
     print(f'We have logged in as {bot.user}')
     if os.environ.get("RESTAURANT_CHANNEL_ID"):
         print("Scheduling menu sending...")
-        time = "09:00" # 9시에 메뉴 전송
+        time = "10:30" # 9시에 메뉴 전송
         schedule.every().monday.at(time).do(lambda: asyncio.create_task(ajou_portal.send_menu(bot)))
         schedule.every().tuesday.at(time).do(lambda: asyncio.create_task(ajou_portal.send_menu(bot)))
         schedule.every().wednesday.at(time).do(lambda: asyncio.create_task(ajou_portal.send_menu(bot)))
@@ -170,6 +173,83 @@ async def on_message(message):
     if not message.guild:
         await message.channel.send('this is a dm')
         
+
+REVIEW_MESSAGE_FORMAT = """
+**제목**: {title}
+**저자**: {authors}
+**Review URL**: {url}
+**TL;DR**: {tldr}""".strip()
+
+# 진행 중인 작업을 추적하기 위한 딕셔너리
+active_reviews = {}
+
+@bot.command()
+async def review(ctx, url: str):
+    await ctx.message.add_reaction("👀")
+
+    # 이미 진행 중인 리뷰가 있는지 확인
+    if url in active_reviews:
+        await ctx.send("이미 해당 논문은 리뷰를 진행중입니다. 완료될 때까지 기다려주세요.")
+        return
+    
+    # 현재 작업 추적
+    active_reviews[url] = True
+    
+    try:
+        # 비동기로 리뷰 작업 실행
+        task = asyncio.create_task(process_review(ctx, url))
+        await task
+        
+    except Exception as e:
+        await ctx.send(f"리뷰 중 오류가 발생했습니다: {str(e)}")
+        print(f"Error in review command: {e}")
+        traceback.print_exc()
+    
+    finally:
+        # 작업 완료 후 진행 중 표시 제거
+        del active_reviews[url]
+        # 눈 이모지 제거
+        await ctx.message.remove_reaction("👀", bot.user)
+
+async def process_review(ctx, url: str):
+    try:
+        paper_id, paper = manager.get_by_url(url)
+        old_review = paper_id is not None
+
+        if paper_id is None:
+            # 기존의 리뷰 로직을 비동기로 실행
+            paper_id, paper = await asyncio.to_thread(
+                review_pdf, 
+                client, 
+                "gpt-4o",
+                manager,
+                url
+            )
+        
+        review_url = os.environ["HEEGYUPT_WEB_URL"] + "review/" + paper_id
+        
+        review_message = REVIEW_MESSAGE_FORMAT.format(
+            title=paper.title,
+            authors=paper.authors,
+            url=review_url,
+            tldr=paper.tldr
+        )
+        if old_review:
+            old_date = paper.review_time.strftime("%Y-%m-%d %H:%M:%S")
+            review_message += "\n\n예전에 작성한 리뷰입니다: " + old_date
+        
+        # 임베드 생성
+        # embed = discord.Embed(
+        #     title="논문 리뷰 완료",
+        #     description=review_message,
+        #     color=discord.Color.green()
+        # )
+        
+        await ctx.send(review_message)
+        
+    except Exception as e:
+        raise e
+    
 @bot.command()
 async def chat(ctx, *, message: str):
     global user_history

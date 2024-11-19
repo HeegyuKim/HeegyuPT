@@ -53,7 +53,7 @@ async def get_menu():
 
 async def send_menu(bot):
     print("Sending menu...")
-    channel = bot.get_channel(CHANNEL_ID)
+    channel = bot.get_channel(int(CHANNEL_ID))
     menu = await get_menu()
     await channel.send(menu)
 

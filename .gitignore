@@ -1,4 +1,6 @@
 run.sh
+run_server.sh
+
 pdfs/
 
 # Byte-compiled / optimized / DLL files
