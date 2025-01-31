@@ -5,10 +5,9 @@ from .convert import download_pdf, parse_pdf
 from .firebase_utils import FirebaseManager, PaperStore
 from bs4 import BeautifulSoup
 import requests
-import base64, markdown
+import base64
 import markdownify
 from pprint import pprint
-
 
 
 class PaperInfoExtraction(BaseModel):
@@ -187,7 +186,7 @@ def review_pdf(client, model: str, manager: FirebaseManager, pdf_url: str, uploa
             abstract=paper_info.abstract,
             authors=paper_info.authors,
             tldr=paper_info.tldr,
-            markdown=pdf_text,
+            markdown=pdf_text[:40000] if len(pdf_text) > 40000 else pdf_text,
             review=review,
             url=pdf_url,
             review_time=datetime.now(),

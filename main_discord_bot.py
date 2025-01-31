@@ -8,6 +8,7 @@ import openai
 import schedule
 from pdfchat import download_pdf, extract_text_from_pdf, get_vector_store, setup_conversational_chain
 from web_summ import summarize_website
+from openreview_summ import get_openreview_summarization
 import logging
 import ajou_portal
 import os
@@ -339,6 +340,22 @@ async def websumm(ctx, url: str, model: str = "gpt-4o-mini"):
         await ctx.send(f"An error occurred while summarizing the website: {str(e)}")
         print(f"Error in summarize command: {e}")
         traceback.print_exc()
+
+@bot.command()
+async def openreview(ctx, url: str, model: str = "gpt-4o"):
+    try:
+        # mark emoji
+        await ctx.message.add_reaction("👀")
+        review = await get_openreview_summarization(client, url, model)
+        await ctx.send(review)
+        # remove mark emoji
+        await ctx.message.remove_reaction("👀", bot.user)
+
+    except Exception as e:
+        await ctx.send(f"An error occurred while summarizing the website: {str(e)}")
+        print(f"Error in summarize command: {e}")
+        traceback.print_exc()
+        await ctx.message.remove_reaction("👀", bot.user)
 
 # Replace 'YOUR_DISCORD_BOT_TOKEN' with your actual bot token
 bot.run(os.getenv('DISCORD_BOT_TOKEN'))

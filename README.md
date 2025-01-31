@@ -49,3 +49,30 @@ RESTAURANT_CHANNEL_ID="YOUR_DISCORD_CHANNEL_ID" # 아주대학교 식당 메뉴 
 `RESTAURANT_CHANNEL_ID`는 아주대학교 식당 메뉴를 전송하기 위한 채널 ID입니다. 설정하지 않으면 메뉴 전송 기능이 비활성화됩니다.
 
 이제 HeegyuPT를 사용하여 웹 페이지와 PDF 문서를 쉽게 요약할 수 있습니다. 디스코드 서버에서 여러분의 봇을 생성한 뒤 초대하고 명령어를 통해 요약 기능을 사용해보세요!
+
+### 도커로 쓰기
+1. run.sh 파일을 만들어서 아래 내용을 적어줍니다.
+```bash 
+export OPENAI_API_KEY=
+export DISCORD_BOT_TOKEN=
+export RESTAURANT_CHANNEL_ID=
+export FIREBASE_PROJECT_ID=
+export HEEGYUPT_WEB_URL=
+python main_discord_bot.py
+```
+
+2. run_server.sh 파일을 만들어서 아래 내용을 적어줍니다.
+```bash
+export FIREBASE_PROJECT_ID=
+gunicorn app:app -b 0.0.0.0:5000
+```
+2. 아래 명령어로 Docker 이미지를 빌드한 뒤 실행합니다.
+```bash
+# Discord 봇 실행
+docker build -f Dockerfile.discord -t heegyupt-discord .
+docker run -itd --restart always --net host heegyupt-discord
+
+# 웹 서버 실행 (포트 5000 사용)
+docker build -f Dockerfile.webserver -t heegyupt-webserver .
+docker run -itd --restart always -p 5000:5000 heegyupt-webserver
+```

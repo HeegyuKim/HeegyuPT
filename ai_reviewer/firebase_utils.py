@@ -7,8 +7,6 @@ import os, io
 import base64
 from PIL import Image
 import json
-import tempfile
-import markdown
 
 
 class PaperStore(BaseModel):

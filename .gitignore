@@ -1,5 +1,6 @@
 run.sh
 run_server.sh
+firebase-credentials.json
 
 pdfs/
 
