@@ -92,17 +92,13 @@ def process_web_search(prompt):
     )
     result = output.choices[0].message.content
     
-    if hasattr(output, "annotations"):
-        for annotation in output.annotations:
+    if hasattr(output.choices[0].message, "annotations"):
+        for i, annotation in enumerate(output.choices[0].message.annotations):
             if annotation['type'] == 'url_citation':
                 cite = annotation['url_citation']
-                start_index, end_index = cite['start_index'], cite['end_index']
-                if start_index == end_index:
-                    index = f"[{start_index + 1}]"
-                else:
-                    index = f"[{start_index + 1}-{end_index + 1}]"
-                result += f"\n\nSource: {annotation.source_url}"
+                result += f"\n\n[{i + 1}]: {cite['url']}"
 
+    return result
 
 if st.button("Generate PPT"):
     
