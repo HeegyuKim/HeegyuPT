@@ -62,7 +62,11 @@ def process_presentation(prompt, files):
     # Call the function to create a presentation from the report
     try:
         report = files_to_report(files)
-        output_filename = asyncio.run(create_presentation_from_report(prompt, report, model="gpt-4.1-mini"))
+        output_filename = asyncio.run(create_presentation_from_report(
+            prompt, 
+            report, 
+            model=os.environ.get("LLM_MODEL", "gpt-4.1-mini"),
+            ))
         st.success("PPT generated successfully!")
 
         st.download_button(
@@ -79,7 +83,8 @@ def process_web_search(prompt):
     prompt = f"Search the web and create a report for information related to:\n\n{prompt}"
     output = litellm.completion(
         # model="openrouter/perplexity/sonar-deep-research",
-        model="openrouter/perplexity/sonar-pro",
+        # model="openrouter/perplexity/sonar-pro",
+        model=os.environ.get("LLM_MODEL_WEB", "openrouter/perplexity/sonar-pro"),
         messages=[
             {"role": "user", "content": prompt}
         ],
