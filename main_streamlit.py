@@ -71,8 +71,10 @@ def process_presentation(prompt, files):
 
         st.download_button(
             label="Download PPT",
-            data=output_filename,
-            file_name=output_filename,
+            data=open(output_filename, "rb").read(),
+            file_name=output_filename.split("/")[-1],
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            icon=":material/download:",
         )
     except Exception as e:
         st.error(f"An error occurred while generating the PPT: {e}")
