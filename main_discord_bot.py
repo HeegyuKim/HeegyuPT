@@ -14,7 +14,13 @@ import ajou_portal
 import os
 from ai_reviewer.firebase_utils import FirebaseManager
 from ai_reviewer.review import review_pdf
-
+from ai_scientist.perform_review import perform_review_from_pdf
+from pptgen import create_presentation_from_report
+from deepresearch import get_deep_research
+import litellm
+from dotenv import load_dotenv
+import tempfile
+load_dotenv()
 
 logger = logging.getLogger('discord')
 logger.setLevel(logging.DEBUG)
@@ -32,6 +38,11 @@ client = openai.OpenAI()
 bot = commands.Bot(command_prefix='!', intents=intents)
 manager = FirebaseManager()
 
+async def send_long_message(ctx, message):
+    chunks = [message[i:i+1900] for i in range(0, len(message), 1900)]
+    for chunk in chunks:
+        await ctx.send(chunk)
+
 async def download_file(ctx, url, filename):
     # 파일 다운로드
     async with aiohttp.ClientSession() as session:
@@ -44,7 +55,11 @@ async def download_file(ctx, url, filename):
                 await ctx.send(f'{filename} 다운로드 완료!')
             else:
                 await ctx.send('파일 다운로드 실패')
-                
+
+@bot.command()
+async def status(ctx):
+    await ctx.send("I'm alive!")
+
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
@@ -94,21 +109,21 @@ async def on_command_error(ctx, error):
         # await dev_user.send(f"An error occurred in command {ctx.command}:\n```{error_msg}```")
 
 
-async def get_openai_response(prompt, model="gpt-4o-mini", system_prompt="You are a helpful AI assistant specializing in answering questions."):
+async def get_openai_response(prompt, model="gpt-4.1-mini", system_prompt="You are a helpful AI assistant specializing in answering questions."):
     response = client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=4096,
+        max_tokens=16384,
     )
     return response.choices[0].message.content
 
-ALLOWED_MODELS = ["gpt-3.5-turbo", "gpt-4o", "gpt-4o-mini"]
+ALLOWED_MODELS = ["gpt-4.1", "gpt-4.1-mini", "o4-mini"]
 
 @bot.command()
-async def paper(ctx, input: str = None, model: str = "gpt-4o-mini"):
+async def paper(ctx, input: str = None, model: str = "gpt-4.1"):
     url = None
     attachment = None
 
@@ -212,6 +227,7 @@ async def review(ctx, url: str):
         # 눈 이모지 제거
         await ctx.message.remove_reaction("👀", bot.user)
 
+
 async def process_review(ctx, url: str):
     try:
         paper_id, paper = manager.get_by_url(url)
@@ -251,6 +267,99 @@ async def process_review(ctx, url: str):
     except Exception as e:
         raise e
     
+@bot.command(name="pro-review")
+async def pro_review(ctx):
+    await ctx.message.add_reaction("👀")
+    
+    # 첨부파일이 있는지 확인
+    if not ctx.message.attachments:
+        await ctx.send("PDF 파일을 첨부해주세요.")
+        return
+
+    # 첫 번째 첨부파일만 처리
+    attachment = ctx.message.attachments[0]
+    
+    # 파일 확장자 확인
+    if not attachment.filename.lower().endswith(".pdf"):
+        await ctx.send("PDF 파일만 지원합니다.")
+        return
+
+    # 파일 저장 경로 설정
+    save_path = f"./{attachment.filename}"
+    await attachment.save(save_path)  # 파일 저장[1][3]
+
+    await ctx.send(f"{attachment.filename} 파일을 저장했습니다. 리뷰를 시작합니다.")
+
+    # perform_review_from_pdf 함수 호출 (비동기/동기 여부에 따라 다름)
+    # 예시: 결과를 받아서 메시지로 전송
+    try:
+        result, _ = perform_review_from_pdf(
+            save_path,
+            model="gpt-4.1",
+            client=client,
+            num_reflections=5,
+            num_fs_examples=1,
+            num_reviews_ensemble=5
+            )
+        await send_long_message(ctx, result)
+    except Exception as e:
+        await ctx.send(f"리뷰 중 오류가 발생했습니다: {str(e)}")
+        print(f"Error in pro_review command: {e}")
+        traceback.print_exc()
+    finally:
+        # 파일 삭제 (선택사항)
+        if os.path.exists(save_path):
+            os.remove(save_path)
+        
+        # 눈 이모지 제거
+        await ctx.message.remove_reaction("👀", bot.user)
+    
+@bot.command()
+async def research(ctx, *, question: str):
+    await ctx.message.add_reaction("👀")
+
+    try:
+        # 비동기로 리뷰 작업 실행
+        output = await get_deep_research(question)
+        await send_long_message(ctx, output)
+        
+    except Exception as e:
+        await ctx.send(f"리서치 중 오류가 발생했습니다: {str(e)}")
+        print(f"Error in review command: {e}")
+        traceback.print_exc()
+    
+    finally:
+        # 눈 이모지 제거
+        await ctx.message.remove_reaction("👀", bot.user)
+    
+@bot.command()
+async def search(ctx, *, question: str):
+    await ctx.message.add_reaction("👀")
+
+    try:
+        # 비동기로 리뷰 작업 실행
+        output = await litellm.acompletion(
+            model="openai/gpt-4o-mini-search-preview",
+            messages=[
+                {
+                    "role": "user",
+                    "content": question,
+                }
+            ],
+            max_tokens=4096,
+        )
+        output = output.choices[0].message.content
+        await send_long_message(ctx, output)
+        
+    except Exception as e:
+        await ctx.send(f"리서치 중 오류가 발생했습니다: {str(e)}")
+        print(f"Error in review command: {e}")
+        traceback.print_exc()
+    
+    finally:
+        # 눈 이모지 제거
+        await ctx.message.remove_reaction("👀", bot.user)
+
 @bot.command()
 async def chat(ctx, *, message: str):
     global user_history
@@ -268,7 +377,7 @@ async def chat(ctx, *, message: str):
     try:
         async with ctx.typing():
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4.1-mini",
                 messages=[
                     {"role": "system", "content": "You are a helpful AI assistant specializing in answering questions."},
                     *history
@@ -329,7 +438,7 @@ async def clear(ctx):
     await ctx.send("Chat history has been cleared.")
 
 @bot.command()
-async def websumm(ctx, url: str, model: str = "gpt-4o-mini"):
+async def websumm(ctx, url: str, model: str = "gpt-4.1-mini"):
     try:
         async with ctx.typing():
             summary = await summarize_website(client, url, model=model)
@@ -342,7 +451,7 @@ async def websumm(ctx, url: str, model: str = "gpt-4o-mini"):
         traceback.print_exc()
 
 @bot.command()
-async def openreview(ctx, url: str, model: str = "gpt-4o"):
+async def openreview(ctx, url: str, model: str = "gpt-4.1"):
     try:
         # mark emoji
         await ctx.message.add_reaction("👀")
@@ -356,6 +465,62 @@ async def openreview(ctx, url: str, model: str = "gpt-4o"):
         print(f"Error in summarize command: {e}")
         traceback.print_exc()
         await ctx.message.remove_reaction("👀", bot.user)
+
+@bot.command()
+async def pptgen(ctx, *, user_requirements: str):
+    # read attached files
+    if not ctx.message.attachments:
+        await ctx.send("PDF, TXT, MD 파일을 첨부해주세요.")
+        return
+    if not user_requirements:
+        await ctx.send("사용자 요구사항을 입력해주세요. (예: '이 논문에 대한 15장 프레젠테이션을 생성해주세요')")
+        return
+    
+    # 눈 이모지 추가
+    await ctx.message.add_reaction("👀")
+
+
+    # read txt, md, pdf
+    report = ""
+    for attachment in ctx.message.attachments:
+        if attachment.filename.lower().endswith(('.txt', '.md', '.pdf')):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=attachment.filename) as temp_file:
+                await attachment.save(temp_file.name)
+
+                with open(temp_file.name, 'rb') as f:
+                    if attachment.filename.lower().endswith('.pdf'):
+                        # PDF 파일 처리
+                        pdf_text = await extract_text_from_pdf(temp_file.name)
+                        report += "\n---\n\n# File: " + attachment.filename + "\n\n" + pdf_text + "\n\n"
+                    else:
+                        # 텍스트 파일 처리
+                        text_content = f.read().decode('utf-8')
+                        report += "\n---\n\n# File: " + attachment.filename + "\n\n" + text_content + "\n\n"
+        else:
+            await ctx.send(f"{attachment.filename} 파일은 지원하지 않습니다. PDF, TXT, MD 파일만 지원합니다.")
+            return
+    if not report:
+        await ctx.send("첨부된 파일에서 내용을 읽을 수 없습니다.")
+        return
+    try:
+        # 비동기로 프레젠테이션 생성
+        ppt_path = await create_presentation_from_report(
+            report=report,
+            user_requirements=user_requirements,
+            model="gpt-4.1-mini",
+        )
+        if ppt_path:
+            await ctx.send(file=discord.File(ppt_path))
+        else:
+            await ctx.send("프레젠테이션 생성에 실패했습니다.")
+    except Exception as e:
+        await ctx.send(f"프레젠테이션 생성 중 오류가 발생했습니다: {str(e)}")
+        print(f"Error in deep_ppt_gen command: {e}")
+        traceback.print_exc()
+    finally:
+        # 눈 이모지 제거
+        await ctx.message.remove_reaction("👀", bot.user)    
+    
 
 # Replace 'YOUR_DISCORD_BOT_TOKEN' with your actual bot token
 bot.run(os.getenv('DISCORD_BOT_TOKEN'))

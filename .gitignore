@@ -1,6 +1,8 @@
 run.sh
 run_server.sh
 firebase-credentials.json
+example_papers/
+generated_presentations/
 
 pdfs/
 
